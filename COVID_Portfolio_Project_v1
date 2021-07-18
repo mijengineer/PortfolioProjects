@@ -1,0 +1,114 @@
+--Data Source Our World in Data Covid Data who got their data from the 
+--COVID-19 Data Repository by the Center for Systems Science and Engineering (CSSE) at Johns Hopkins University.
+
+--SELECT * FRom covid_deaths
+--order by 3,4;
+
+--SELECT * FROM covid_vaccinations
+--order by 3,4;
+
+Select Continent, Location, date, total_cases, new_cases, total_deaths, population
+FROM covid_deaths
+WHERE Continent is NOT NULL
+order by 1,2;
+
+-- Looking at the total cases vs total deaths
+-- Shows the likelihood of dying if you contract covid in your country
+Select Continent, Location, date, total_cases, total_deaths, round((total_deaths/total_cases)*100,2) as Deathpercentage
+FROM covid_deaths
+WHERE Continent is NOT NULL and Location like '%States%'														
+order by 1,2;
+
+-- Looking at the total cases vs population
+-- Shows what percentage of the population got Covid
+Select Continent, Location, date, population, total_cases, round((total_cases/population)*100,4) as Casepopulation
+FROM covid_deaths
+WHERE Continent is NOT NULL and Location like '%States%'														
+order by 1,2;
+
+-- Looking at countries with highest infection rate by population
+Select Location, population, MAX(total_cases) as highestInfectionCount, round((MAX(total_cases)/population)*100,4) as Casepopulation
+FROM covid_deaths
+WHERE Continent is NOT NULL
+Group By Location, population
+order by 4 desc Nulls last;
+
+--Showing the countries with the highest death count per population
+Select Location, MAX(total_deaths) as highestDeathCount, round((MAX(total_deaths)/population)*100,4) as TotalDeathCount
+FROM covid_deaths
+WHERE Continent is NOT NULL
+Group By Location, population
+order by 2 desc Nulls last;
+
+--Showing the countients highest death count
+Select continent, MAX(total_deaths) as highestDeathCount
+FROM covid_deaths
+where continent is not null
+Group By continent
+order by 2 desc Nulls last;
+
+-- GLOBAL NUMBERS
+Select date, sum(new_cases) as total_cases, sum(new_deaths) as total_deaths, round(avg((total_deaths/total_cases)*100),4) as Death_Percentage
+FROM covid_deaths
+WHERE continent is not NULL
+Group by date
+Order by date;
+
+Select sum(new_cases) as total_cases, sum(new_deaths) as total_deaths, round(avg((total_deaths/total_cases)*100),4) as Death_Percentage
+FROM covid_deaths
+WHERE continent is not NULL;
+
+--Total Population vs Vaccinations
+
+
+-- USE CTE
+WITH PopvsVac (	Continent, location, date, Population,New_Vaccinations, Total_Vaccinations)
+AS
+(
+SELECT d.continent, d.location, d.date, d.population, v.new_vaccinations, sum(v.new_vaccinations) over (Partition by d.location Order by d.location,d.date) as Total_vaccinations
+FROM covid_deaths as d
+Join covid_vaccinations as v
+	on d.location = v.location and d.date = v.date
+Where d.continent is not null
+--Order by 2,3;
+)
+SELECT *, round((total_vaccinations/population)*100,4) as pct_vaccinated From PopvsVac 
+Where location = 'Gibraltar';
+
+-- Max by Country
+WITH PopvsVac (	Continent, location, date, Population,Total_Vaccinations)
+AS
+(
+SELECT d.continent, d.location, d.date, d.population, sum(v.people_fully_vaccinated) over (Partition by d.location Order by d.location,d.date) as Total_vaccinations
+FROM covid_deaths as d
+Join covid_vaccinations as v
+	on d.location = v.location and d.date = v.date
+Where d.continent is not null
+--Order by 2,3;
+)
+SELECT location, Max(round((total_vaccinations/population)*100,4)) as max_pct_vaccinated from popvsvac
+group by location
+order by 2 desc nulls last;
+
+-- Temp Table
+Drop Table if exists PercentPopulationVaccinated;
+
+SELECT d.continent, d.location, d.date, d.population, v.new_vaccinations, sum(v.new_vaccinations) over (Partition by d.location Order by d.location,d.date) as Total_vaccinations
+Into Temporary Table PercentPopulationVaccinated
+FROM covid_deaths as d
+Join covid_vaccinations as v
+	on d.location = v.location and d.date = v.date
+Where d.continent is not null;
+
+SELECT *, round((total_vaccinations/population)*100,4) as percent_vaccinated FROM PercentPopulationVaccinated;
+
+--Creating View to Store Data for later Visualizations
+
+Create View PercentPopulationVaccinated as
+SELECT d.continent, d.location, d.date, d.population, v.new_vaccinations, sum(v.new_vaccinations) over (Partition by d.location Order by d.location,d.date) as Total_vaccinations
+FROM covid_deaths as d
+Join covid_vaccinations as v
+	on d.location = v.location and d.date = v.date
+Where d.continent is not null;
+
+
